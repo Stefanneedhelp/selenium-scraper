@@ -6,7 +6,7 @@ options.add_argument("--headless")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 
-driver = uc.Chrome(options=options)
+driver = uc.Chrome(options=options, use_subprocess=True)
 
 try:
     driver.get("https://example.com")
