@@ -6,7 +6,6 @@ options.add_argument("--headless")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 
-# NE postavljaj binary_location, Render će automatski naći browser
 driver = uc.Chrome(options=options, use_subprocess=True)
 
 try:
