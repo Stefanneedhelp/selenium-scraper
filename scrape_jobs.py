@@ -1,6 +1,7 @@
 import os
 import time
 import telegram
+import asyncio
 import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
@@ -21,13 +22,13 @@ options.add_argument("--headless")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 
-service = Service()  # automatski koristi instalirani driver
+service = Service()
 driver = webdriver.Chrome(service=service, options=options)
 
-def scrape_jobs():
-    url = "https://www.needhelp.com/pro/search"  # <-- ovde pravi link na NeedHelp
+async def scrape_jobs():
+    url = "https://www.needhelp.com/pro/search"
     driver.get(url)
-    time.sleep(3)  # čekanje da se stranica učita
+    time.sleep(3)
 
     soup = BeautifulSoup(driver.page_source, "html.parser")
     jobs = soup.find_all("div", class_="job-offer-card-content")
@@ -55,21 +56,25 @@ def scrape_jobs():
 
     return filtered_jobs
 
-def send_to_telegram(message):
+async def send_to_telegram(message):
     bot = telegram.Bot(token=TOKEN)
-    bot.send_message(chat_id=CHAT_ID, text=message)
+    await bot.send_message(chat_id=CHAT_ID, text=message)
 
-if __name__ == "__main__":
+async def main():
     try:
-        jobs = scrape_jobs()
+        jobs = await scrape_jobs()
         if jobs:
             for job in jobs:
-                send_to_telegram(f"Nova ponuda: {job}")
+                await send_to_telegram(f"Nova ponuda: {job}")
         else:
-            send_to_telegram("Nema novih poslova za danas.")
+            await send_to_telegram("Nema novih poslova za danas.")
     except Exception as e:
-        send_to_telegram(f"Bot error: {e}")
+        await send_to_telegram(f"Bot error: {e}")
     finally:
         driver.quit()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
 
 
