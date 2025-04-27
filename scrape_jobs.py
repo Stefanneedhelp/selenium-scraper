@@ -1,65 +1,68 @@
 import os
 import time
-import requests
+import telegram
+import chromedriver_autoinstaller
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from bs4 import BeautifulSoup
+from selenium.webdriver.chrome.service import Service
 
-# Učitaj .env fajl
+# Učitavanje .env varijabli
 load_dotenv()
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
 
-# Tvoj sajt
-URL = "https://www.needhelp.com/en-gb/listing"
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# Koje ključne reči filtriramo
-KEYWORDS = [
-    "Montage de meubles", "Menuisier, ébéniste", "Électricité", "Pose carrelage",
-    "Percer, fixer", "Découpe", "Pose sanitaire", "Pose parquet",
-    "Enduit", "Peinture", "Pose de porte, portail"
-]
+bot = telegram.Bot(token=TOKEN)
 
-def send_telegram_message(message):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"}
-    requests.post(url, data=payload)
+# Auto instalacija ChromeDriver-a
+chromedriver_autoinstaller.install()
 
-def scrape_jobs():
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+# Podesavanje za Render server
+options = Options()
+options.binary_location = "/usr/bin/chromium-browser"
+options.add_argument("--headless")
+options.add_argument("--no-sandbox")
+options.add_argument("--disable-dev-shm-usage")
 
-    service = Service("/usr/bin/chromedriver")  # Render koristi ovaj path
+service = Service()
+driver = webdriver.Chrome(service=service, options=options)
 
-    driver = webdriver.Chrome(service=service, options=chrome_options)
+try:
+    # Otvaranje stranice
+    driver.get("https://www.needhelp.com/en/jobs")
+    time.sleep(2)
 
-    try:
-        driver.get(URL)
-        time.sleep(3)  # Sačekaj da se sve učita
+    # Parsiranje HTML-a
+    soup = BeautifulSoup(driver.page_source, "html.parser")
 
-        soup = BeautifulSoup(driver.page_source, "html.parser")
-        jobs = soup.find_all("div", class_="taskCard--details")
+    # Traženje svih poslova
+    jobs = soup.find_all("div", class_="job-card")
 
-        for job in jobs:
-            title = job.find("h2")
-            if title:
-                title_text = title.get_text().strip()
-                if any(keyword.lower() in title_text.lower() for keyword in KEYWORDS):
-                    link = "https://www.needhelp.com" + job.find("a")["href"]
-                    message = f"<b>{title_text}</b>\n{link}"
-                    send_telegram_message(message)
+    # Lista zanimanja koje pratiš
+    keywords = [
+        "Montage de meubles",
+        "Menuisier, ébéniste",
+        "Électricité",
+        "Pose carrelage",
+        "Béton",
+        "Percer, fixer",
+        "Enduit",
+        "Pose de porte, portail",
+        "Découpe",
+        "Pose sanitaire",
+        "Pose parquet",
+        "Peinture"
+    ]
 
-    finally:
-        driver.quit()
+    # Slanje poslova na Telegram
+    for job in jobs:
+        job_title = job.text.strip()
+        for keyword in keywords:
+            if keyword.lower() in job_title.lower():
+                bot.send_message(chat_id=CHAT_ID, text=f"🛠 Novi posao: {job_title}")
+                break
 
-if __name__ == "__main__":
-    while True:
-        scrape_jobs()
-        print("✅ Provereno! Čeka sledećih 30 minuta...")
-        time.sleep(1800)  # 30 minuta
-
+finally:
+    driver.quit()
