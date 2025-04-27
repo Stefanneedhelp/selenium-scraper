@@ -1,68 +1,75 @@
 import os
 import time
 import telegram
-import chromedriver_autoinstaller
+import requests
 from bs4 import BeautifulSoup
-from dotenv import load_dotenv
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from dotenv import load_dotenv
 
-# Učitavanje .env varijabli
+# Učitavanje .env fajla
 load_dotenv()
 
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+# Uzimanje podataka iz .env
+TOKEN = os.getenv("TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
-bot = telegram.Bot(token=TOKEN)
-
-# Auto instalacija ChromeDriver-a
-chromedriver_autoinstaller.install()
-
-# Podesavanje za Render server
+# Podesavanje Chrome drivera
 options = Options()
-options.binary_location = "/usr/bin/chromium-browser"
 options.add_argument("--headless")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 
-service = Service()
+service = Service()  # automatski koristi instalirani driver
 driver = webdriver.Chrome(service=service, options=options)
 
-try:
-    # Otvaranje stranice
-    driver.get("https://www.needhelp.com/en/jobs")
-    time.sleep(2)
+def scrape_jobs():
+    url = "https://www.needhelp.com/pro/search"  # <-- ovde pravi link na NeedHelp
+    driver.get(url)
+    time.sleep(3)  # čekanje da se stranica učita
 
-    # Parsiranje HTML-a
     soup = BeautifulSoup(driver.page_source, "html.parser")
+    jobs = soup.find_all("div", class_="job-offer-card-content")
 
-    # Traženje svih poslova
-    jobs = soup.find_all("div", class_="job-card")
+    filtered_jobs = []
 
-    # Lista zanimanja koje pratiš
     keywords = [
         "Montage de meubles",
         "Menuisier, ébéniste",
         "Électricité",
         "Pose carrelage",
-        "Béton",
-        "Percer, fixer",
         "Enduit",
         "Pose de porte, portail",
+        "Percer, fixer",
         "Découpe",
         "Pose sanitaire",
         "Pose parquet",
         "Peinture"
     ]
 
-    # Slanje poslova na Telegram
     for job in jobs:
-        job_title = job.text.strip()
-        for keyword in keywords:
-            if keyword.lower() in job_title.lower():
-                bot.send_message(chat_id=CHAT_ID, text=f"🛠 Novi posao: {job_title}")
-                break
+        title = job.get_text(strip=True)
+        if any(keyword.lower() in title.lower() for keyword in keywords):
+            filtered_jobs.append(title)
 
-finally:
-    driver.quit()
+    return filtered_jobs
+
+def send_to_telegram(message):
+    bot = telegram.Bot(token=TOKEN)
+    bot.send_message(chat_id=CHAT_ID, text=message)
+
+if __name__ == "__main__":
+    try:
+        jobs = scrape_jobs()
+        if jobs:
+            for job in jobs:
+                send_to_telegram(f"Nova ponuda: {job}")
+        else:
+            send_to_telegram("Nema novih poslova za danas.")
+    except Exception as e:
+        send_to_telegram(f"Bot error: {e}")
+    finally:
+        driver.quit()
+
+
