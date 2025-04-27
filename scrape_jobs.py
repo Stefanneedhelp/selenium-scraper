@@ -1,51 +1,65 @@
+import os
 import time
+import requests
+from dotenv import load_dotenv
 from selenium import webdriver
-from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-import chromedriver_autoinstaller
+from bs4 import BeautifulSoup
 
-# Automatski instalira chromedriver ako ga nema
-chromedriver_autoinstaller.install()
+# Učitaj .env fajl
+load_dotenv()
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
-# Chrome opcije
-options = Options()
-options.add_argument("--headless")
-options.add_argument("--no-sandbox")
-options.add_argument("--disable-dev-shm-usage")
+# Tvoj sajt
+URL = "https://www.needhelp.com/en-gb/listing"
 
-# Pokretanje drivera
-driver = webdriver.Chrome(options=options)
+# Koje ključne reči filtriramo
+KEYWORDS = [
+    "Montage de meubles", "Menuisier, ébéniste", "Électricité", "Pose carrelage",
+    "Percer, fixer", "Découpe", "Pose sanitaire", "Pose parquet",
+    "Enduit", "Peinture", "Pose de porte, portail"
+]
 
-try:
-    # 1. Otvori NeedHelp sajt
-    driver.get("https://www.needhelp.com")
-    time.sleep(3)
+def send_telegram_message(message):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"}
+    requests.post(url, data=payload)
 
-    # 2. Skrolovanje da učita sve poslove
-    for _ in range(5):
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(2)
+def scrape_jobs():
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
 
-    # 3. Filtriramo po ključnim zanimanjima
-    kljucne_reci = [
-        "montage", "meubles", "menuisier", "ebeniste",
-        "electricite", "carrelage", "percer", "fixer",
-        "enduit", "porte", "portail", "decoupe",
-        "sanitaire", "parquet", "peinture"
-    ]
+    service = Service("/usr/bin/chromedriver")  # Render koristi ovaj path
 
-    # 4. Nađi sve linkove poslova
-    poslovi = driver.find_elements(By.TAG_NAME, "a")
+    driver = webdriver.Chrome(service=service, options=chrome_options)
 
-    print("Nađeni odgovarajući poslovi:")
-    for posao in poslovi:
-        href = posao.get_attribute("href")
-        if href and "needhelp.com" in href:
-            for rec in kljucne_reci:
-                if rec.lower() in href.lower():
-                    print(href)
-                    break
+    try:
+        driver.get(URL)
+        time.sleep(3)  # Sačekaj da se sve učita
 
-finally:
-    driver.quit()
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+        jobs = soup.find_all("div", class_="taskCard--details")
+
+        for job in jobs:
+            title = job.find("h2")
+            if title:
+                title_text = title.get_text().strip()
+                if any(keyword.lower() in title_text.lower() for keyword in KEYWORDS):
+                    link = "https://www.needhelp.com" + job.find("a")["href"]
+                    message = f"<b>{title_text}</b>\n{link}"
+                    send_telegram_message(message)
+
+    finally:
+        driver.quit()
+
+if __name__ == "__main__":
+    while True:
+        scrape_jobs()
+        print("✅ Provereno! Čeka sledećih 30 minuta...")
+        time.sleep(1800)  # 30 minuta
+

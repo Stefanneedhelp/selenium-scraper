@@ -1,2 +1,6 @@
 selenium
+chromedriver-autoinstaller
 undetected-chromedriver
+python-telegram-bot
+
+
