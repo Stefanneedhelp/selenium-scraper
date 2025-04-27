@@ -3,5 +3,6 @@ services:
     name: selenium-scraper
     env: python
     plan: starter
+    region: oregon
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python scrape_jobs.py"
