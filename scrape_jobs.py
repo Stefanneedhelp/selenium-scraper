@@ -1,90 +1,73 @@
-import time
-import os
-import telegram
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service
-from bs4 import BeautifulSoup
-from dotenv import load_dotenv
-import chromedriver_autoinstaller
 
+import os
+import time
+import requests
+from bs4 import BeautifulSoup
+import telegram
+from dotenv import load_dotenv
+
+# Učitavanje .env varijabli
 load_dotenv()
 
-TOKEN = os.getenv("API_TOKEN")
+TOKEN = os.getenv("TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
 bot = telegram.Bot(token=TOKEN)
 
-chromedriver_autoinstaller.install()
+# 🛎️ Pošalji obaveštenje kad bot krene
+bot.send_message(chat_id=CHAT_ID, text="✅ Bot je uspešno pokrenut na Renderu!")
 
-keywords = [
+# URL sajta
+URL = "https://www.needhelp.com/profils"
+
+# Lista dozvoljenih zanimanja
+DOZVOLJENA_ZANIMANJA = [
     "Montage de meubles", "Menuisier, ébéniste", "Électricité", "Pose carrelage",
-    "Béton", "Percer, fixer", "Découpe", "Pose sanitaire", "Pose parquet",
-    "Peinture", "Enduit", "Pose de porte, portail"
+    "Percer, fixer", "Découpe", "Pose sanitaire", "Pose parquet", "Peinture", 
+    "Enduit", "Pose de porte, portail"
 ]
 
-def create_driver():
-    options = Options()
-    options.add_argument('--headless')
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
-    return webdriver.Chrome(options=options)
+# Set za čuvanje već viđenih poslova
+vidjeni_poslovi = set()
 
-def scrape_jobs():
-    driver = create_driver()
-    driver.get('https://www.needhelp.com/en/jobs')
-    time.sleep(5)
+def pronadji_poslove():
+    try:
+        response = requests.get(URL)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+        
+        poslovi = soup.find_all("div", class_="profile-card")  # ← prilagodi ako treba
+        
+        novi_poslovi = []
 
-    last_height = driver.execute_script("return document.body.scrollHeight")
-    while True:
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(2)
-        new_height = driver.execute_script("return document.body.scrollHeight")
-        if new_height == last_height:
-            break
-        last_height = new_height
+        for posao in poslovi:
+            naziv_element = posao.find("h2")
+            kategorija_element = posao.find("div", class_="profile-skills")
 
-    soup = BeautifulSoup(driver.page_source, 'html.parser')
-    driver.quit()
+            if naziv_element and kategorija_element:
+                naziv = naziv_element.text.strip()
+                kategorija = kategorija_element.text.strip()
 
-    jobs_data = []
+                # Provera da li je zanimanje na listi
+                if any(dozvoljeno in kategorija for dozvoljeno in DOZVOLJENA_ZANIMANJA):
+                    if naziv not in vidjeni_poslovi:
+                        vidjeni_poslovi.add(naziv)
+                        novi_poslovi.append(f"🔹 {naziv} - {kategorija}")
 
-    job_elements = soup.find_all('div', class_='card-body')
-    for job in job_elements:
-        title_element = job.find('h2')
-        link_element = job.find('a', href=True)
+        return novi_poslovi
 
-        if title_element and link_element:
-            title = title_element.get_text(strip=True)
-            link = 'https://www.needhelp.com' + link_element['href']
+    except Exception as e:
+        print(f"Greška prilikom pronalaženja poslova: {e}")
+        return []
 
-            if any(keyword.lower() in title.lower() for keyword in keywords):
-                jobs_data.append((title, link))
+# Glavna petlja
+while True:
+    novi_poslovi = pronadji_poslove()
 
-    return jobs_data
+    if novi_poslovi:
+        for posao in novi_poslovi:
+            bot.send_message(chat_id=CHAT_ID, text=posao)
+    else:
+        print("Nema novih poslova trenutno.")  # Ne šaljemo poruku ako nema novih
 
-def main_loop():
-    sent_jobs = set()
-
-    while True:
-        try:
-            jobs = scrape_jobs()
-            new_jobs = [job for job in jobs if job not in sent_jobs]
-
-            if new_jobs:
-                for title, link in new_jobs:
-                    message = f"🛠 Novi posao: {title}\n🔗 {link}"
-                    bot.send_message(chat_id=CHAT_ID, text=message)
-                    sent_jobs.add((title, link))
-            else:
-                print("⏳ Nema novih poslova. Čekam 5 minuta...")
-
-        except Exception as e:
-            print(f"⚠️ Greška: {e}")
-
-        time.sleep(300)
-
-if __name__ == "__main__":
-    main_loop()
-
+    time.sleep(300)  # 5 minuta pauze
