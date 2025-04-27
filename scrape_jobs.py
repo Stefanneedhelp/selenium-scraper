@@ -1,73 +1,63 @@
-
-import os
-import time
 import requests
 from bs4 import BeautifulSoup
-import telegram
+import time
+import os
 from dotenv import load_dotenv
+from telegram import Bot
 
-# Učitavanje .env varijabli
 load_dotenv()
 
 TOKEN = os.getenv("TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-bot = telegram.Bot(token=TOKEN)
+bot = Bot(token=TOKEN)
 
-# 🛎️ Pošalji obaveštenje kad bot krene
-bot.send_message(chat_id=CHAT_ID, text="✅ Bot je uspešno pokrenut na Renderu!")
-
-# URL sajta
-URL = "https://www.needhelp.com/profils"
-
-# Lista dozvoljenih zanimanja
-DOZVOLJENA_ZANIMANJA = [
+FILTER_KEYWORDS = [
     "Montage de meubles", "Menuisier, ébéniste", "Électricité", "Pose carrelage",
-    "Percer, fixer", "Découpe", "Pose sanitaire", "Pose parquet", "Peinture", 
-    "Enduit", "Pose de porte, portail"
+    "Béton", "Enduit", "Pose de porte, portail", "Découpe", "Pose sanitaire",
+    "Pose parquet", "Peinture"
 ]
 
-# Set za čuvanje već viđenih poslova
-vidjeni_poslovi = set()
+LAST_SEEN_JOBS = set()
 
-def pronadji_poslove():
-    try:
-        response = requests.get(URL)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
-        
-        poslovi = soup.find_all("div", class_="profile-card")  # ← prilagodi ako treba
-        
-        novi_poslovi = []
+def get_jobs():
+    url = "https://www.needhelp.com/jobs"
+    response = requests.get(url)
+    soup = BeautifulSoup(response.text, "html.parser")
+    jobs = soup.find_all("div", class_="jobCard___StyledDiv-sc-1f6v08b-0")
+    found_jobs = []
 
-        for posao in poslovi:
-            naziv_element = posao.find("h2")
-            kategorija_element = posao.find("div", class_="profile-skills")
+    for job in jobs:
+        title_tag = job.find("h2")
+        skill_tag = job.find("div", class_="tags___StyledDiv-sc-1pq4h1c-0")
 
-            if naziv_element and kategorija_element:
-                naziv = naziv_element.text.strip()
-                kategorija = kategorija_element.text.strip()
+        if title_tag and skill_tag:
+            title = title_tag.text.strip()
+            skill = skill_tag.text.strip()
 
-                # Provera da li je zanimanje na listi
-                if any(dozvoljeno in kategorija for dozvoljeno in DOZVOLJENA_ZANIMANJA):
-                    if naziv not in vidjeni_poslovi:
-                        vidjeni_poslovi.add(naziv)
-                        novi_poslovi.append(f"🔹 {naziv} - {kategorija}")
+            if skill in FILTER_KEYWORDS:
+                link_tag = job.find("a", href=True)
+                if link_tag:
+                    link = "https://www.needhelp.com" + link_tag['href']
+                    found_jobs.append((title, skill, link))
 
-        return novi_poslovi
+    return found_jobs
 
-    except Exception as e:
-        print(f"Greška prilikom pronalaženja poslova: {e}")
-        return []
+def main():
+    while True:
+        jobs = get_jobs()
+        new_jobs = []
 
-# Glavna petlja
-while True:
-    novi_poslovi = pronadji_poslove()
+        for title, skill, link in jobs:
+            if link not in LAST_SEEN_JOBS:
+                LAST_SEEN_JOBS.add(link)
+                new_jobs.append(f"🛠️ {title}\n🔧 {skill}\n🔗 {link}")
 
-    if novi_poslovi:
-        for posao in novi_poslovi:
-            bot.send_message(chat_id=CHAT_ID, text=posao)
-    else:
-        print("Nema novih poslova trenutno.")  # Ne šaljemo poruku ako nema novih
+        if new_jobs:
+            for message in new_jobs:
+                bot.send_message(chat_id=CHAT_ID, text=message)
+        time.sleep(300)  # 5 minuta
 
-    time.sleep(300)  # 5 minuta pauze
+if __name__ == "__main__":
+    main()
+
