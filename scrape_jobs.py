@@ -2,55 +2,61 @@ import os
 import time
 import requests
 from bs4 import BeautifulSoup
-from telegram import Bot
 from dotenv import load_dotenv
+from telegram import Bot
 
 load_dotenv()
 
-TOKEN = os.getenv('API_TOKEN')
-CHAT_ID = os.getenv('CHAT_ID')
+TOKEN = os.getenv("TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
+
 bot = Bot(token=TOKEN)
 
-URL = "https://www.needhelp.com/fr/missions"
-CHECK_INTERVAL = 300  # 5 minuta = 300 sekundi
+# Lista zanimanja koje pratimo
+zanimanja = [
+    "Montage de meubles", "Menuisier, ébéniste", "Électricité",
+    "Pose carrelage", "Percer, fixer", "Enduit", "Pose de porte, portail",
+    "Découpe", "Pose sanitaire", "Pose parquet", "Peinture"
+]
 
-def get_available_jobs():
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-    }
-    response = requests.get(URL, headers=headers)
-    soup = BeautifulSoup(response.text, "html.parser")
+URL = "https://www.needhelp.com/fr/missions?available=true"
 
-    jobs = []
-    missions = soup.find_all("div", class_="sc-dfVpRl jymRLp")
+def scrape_jobs():
+    try:
+        response = requests.get(URL)
+        soup = BeautifulSoup(response.content, "html.parser")
+        jobs = soup.find_all("div", class_="task-card")  # Klasa za oglase
+        novi_poslovi = []
 
-    for mission in missions:
-        title = mission.find("h2")
-        location = mission.find("p", class_="sc-dkzDqf gfiVZH")
-        reserved = mission.find("span", string="Réservé abonné")
-        
-        if reserved:
-            continue  # SKOČI rezervisane poslove
-        
-        if title and location:
-            job_text = f"{title.text.strip()} - {location.text.strip()}"
-            jobs.append(job_text)
-    return jobs
+        for job in jobs:
+            title_tag = job.find("h3")
+            if title_tag:
+                title = title_tag.text.strip()
+                for zanimanje in zanimanja:
+                    if zanimanje.lower() in title.lower():
+                        link_tag = job.find("a", href=True)
+                        link = "https://www.needhelp.com" + link_tag["href"] if link_tag else URL
+                        novi_poslovi.append(f"{title}\n{link}")
+                        break
+
+        if novi_poslovi:
+            for posao in novi_poslovi:
+                bot.send_message(chat_id=CHAT_ID, text=posao)
+        else:
+            print("Nema novih poslova.")
+
+    except Exception as e:
+        print(f"Greška pri skeniranju poslova: {e}")
 
 def main():
-    print("✅ Bot pokrenut i prati ponude...")
-    sent_jobs = set()
-
+    bot.send_message(chat_id=CHAT_ID, text="✅ Bot je uspešno pokrenut na Renderu!")
     while True:
-        jobs = get_available_jobs()
-        new_jobs = [job for job in jobs if job not in sent_jobs]
-
-        if new_jobs:
-            for job in new_jobs:
-                bot.send_message(chat_id=CHAT_ID, text=f"🛠️ Novi posao pronađen:\n{job}")
-                sent_jobs.add(job)
-        time.sleep(CHECK_INTERVAL)
+        scrape_jobs()
+        time.sleep(300)  # 5 minuta
 
 if __name__ == "__main__":
     main()
+
+
+
 
