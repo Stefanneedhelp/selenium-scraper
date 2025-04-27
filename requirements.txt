@@ -3,5 +3,6 @@ chromedriver-autoinstaller
 undetected-chromedriver
 python-telegram-bot
 python-dotenv
+beautifulsoup4
 
 
