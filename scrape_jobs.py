@@ -1,62 +1,76 @@
-import os
 import time
+import os
 import requests
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+import chromedriver_autoinstaller
 from dotenv import load_dotenv
-from telegram import Bot
+import telegram
 
+# Učitaj .env varijable
 load_dotenv()
+TOKEN = os.getenv('TOKEN')
+CHAT_ID = os.getenv('CHAT_ID')
 
-TOKEN = os.getenv("TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+# Inicijalizuj Telegram bota
+bot = telegram.Bot(token=TOKEN)
 
-bot = Bot(token=TOKEN)
+# Automatski instaliraj chromedriver
+chromedriver_autoinstaller.install()
 
-# Lista zanimanja koje pratimo
-zanimanja = [
-    "Montage de meubles", "Menuisier, ébéniste", "Électricité",
-    "Pose carrelage", "Percer, fixer", "Enduit", "Pose de porte, portail",
-    "Découpe", "Pose sanitaire", "Pose parquet", "Peinture"
+# Selenium opcije
+chrome_options = Options()
+chrome_options.add_argument("--headless")
+chrome_options.add_argument("--no-sandbox")
+chrome_options.add_argument("--disable-dev-shm-usage")
+
+# Pravi driver
+driver = webdriver.Chrome(options=chrome_options)
+
+# Sajt koji proveravamo
+URL = "https://www.needhelp.com/"
+
+# Filter zanimanja koje tražimo
+DOZVOLJENE_KATEGORIJE = [
+    "Montage de meubles", "Menuisier, ébéniste", "Électricité", "Pose carrelage", 
+    "Percer, fixer", "Découpe", "Pose sanitaire", "Pose parquet", "Peinture",
+    "Enduit", "Pose de porte, portail"
 ]
 
-URL = "https://www.needhelp.com/fr/missions?available=true"
-
-def scrape_jobs():
+# Funkcija za proveru novih poslova
+def proveri_poslove():
     try:
-        response = requests.get(URL)
-        soup = BeautifulSoup(response.content, "html.parser")
-        jobs = soup.find_all("div", class_="task-card")  # Klasa za oglase
+        driver.get(URL)
+        time.sleep(5)  # Sačekaj da se stranica učita
+
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+        poslovi = soup.find_all("div", class_="job-card")  # Primer klasa, izmeni ako treba
+
         novi_poslovi = []
 
-        for job in jobs:
-            title_tag = job.find("h3")
-            if title_tag:
-                title = title_tag.text.strip()
-                for zanimanje in zanimanja:
-                    if zanimanje.lower() in title.lower():
-                        link_tag = job.find("a", href=True)
-                        link = "https://www.needhelp.com" + link_tag["href"] if link_tag else URL
-                        novi_poslovi.append(f"{title}\n{link}")
-                        break
+        for posao in poslovi:
+            kategorija = posao.find("div", class_="job-category")  # Primer klasa
+            if kategorija and kategorija.text.strip() in DOZVOLJENE_KATEGORIJE:
+                naslov = posao.find("h2").text.strip()
+                lokacija = posao.find("div", class_="job-location").text.strip()
+                cena = posao.find("div", class_="job-price").text.strip()
+
+                novi_poslovi.append(f"🔔 Novi posao: {naslov}\n📍 Lokacija: {lokacija}\n💶 Cena: {cena}")
 
         if novi_poslovi:
             for posao in novi_poslovi:
                 bot.send_message(chat_id=CHAT_ID, text=posao)
         else:
             print("Nema novih poslova.")
-
     except Exception as e:
-        print(f"Greška pri skeniranju poslova: {e}")
+        print(f"Greška prilikom provere poslova: {e}")
 
-def main():
-    bot.send_message(chat_id=CHAT_ID, text="✅ Bot je uspešno pokrenut na Renderu!")
-    while True:
-        scrape_jobs()
-        time.sleep(300)  # 5 minuta
+# Pošalji poruku da je bot startovan
+bot.send_message(chat_id=CHAT_ID, text="✅ Bot je pokrenut i proverava poslove!")
 
-if __name__ == "__main__":
-    main()
-
-
-
-
+# Glavna petlja
+while True:
+    proveri_poslove()
+    time.sleep(300)  # Pauza 5 minuta
