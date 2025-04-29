@@ -1,9 +1,8 @@
-selenium
-chromedriver-autoinstaller
-python-telegram-bot==13.15
-python-dotenv
+selenium==4.10.0
 beautifulsoup4
 requests
+python-telegram-bot==13.15
+python-dotenv
 
 
 

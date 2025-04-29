@@ -2,73 +2,67 @@ import os
 import time
 import requests
 from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from telegram import Bot
 from dotenv import load_dotenv
+from telegram import Bot
+import undetected_chromedriver.v2 as uc
 
 load_dotenv()
-
 TOKEN = os.getenv("TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
-
 bot = Bot(token=TOKEN)
 
-# ✅ Putanja do Chromium browsera na Render serveru
-CHROME_PATH = "/usr/bin/chromium-browser"
-CHROMEDRIVER_PATH = "/usr/bin/chromedriver"
-
-options = Options()
-options.binary_location = CHROME_PATH
-options.add_argument("--headless")
-options.add_argument("--no-sandbox")
-options.add_argument("--disable-dev-shm-usage")
-
-service = Service(CHROMEDRIVER_PATH)
-driver = webdriver.Chrome(service=service, options=options)
-
-# ✅ Poslovi koji su već poslati
-sent_jobs = set()
-
-# ✅ Zanimanja koja želiš da pratiš
-KEYWORDS = [
-    "Montage de meubles", "Menuisier, ébéniste", "Électricité",
-    "Pose carrelage", "Enduit", "Pose de porte, portail",
-    "Percer, fixer", "Découpe", "Pose sanitaire",
-    "Pose parquet", "Peinture"
+FILTERED_SKILLS = [
+    "Montage de meubles", "Menuisier, ébéniste", "Électricité", "Pose carrelage",
+    "Percer, fixer", "Enduit", "Pose de porte, portail", "Découpe",
+    "Pose sanitaire", "Pose parquet", "Peinture"
 ]
 
-def check_jobs():
-    global sent_jobs
-    driver.get("https://www.needhelp.com/")
+URL = "https://www.needhelp.com/missions"
+SEEN_MISSIONS = set()
 
-    time.sleep(3)  # sačekaj da se stranica učita
+options = uc.ChromeOptions()
+options.add_argument('--headless')
+options.add_argument('--no-sandbox')
+options.add_argument('--disable-dev-shm-usage')
+driver = uc.Chrome(options=options)
 
+
+def fetch_jobs():
+    driver.get(URL)
+    time.sleep(3)
     soup = BeautifulSoup(driver.page_source, "html.parser")
-    jobs = soup.find_all("div", class_="card-body")
+    cards = soup.find_all("div", class_="css-19uc56f")
 
-    found = False
-    for job in jobs:
-        title_tag = job.find("h2")
-        if title_tag:
-            title = title_tag.get_text(strip=True)
-            if any(keyword.lower() in title.lower() for keyword in KEYWORDS):
-                if title not in sent_jobs:
-                    link = "https://www.needhelp.com" + job.find("a")["href"]
-                    message = f"🔨 Novi posao: {title}\n{link}"
-                    bot.send_message(chat_id=CHAT_ID, text=message)
-                    sent_jobs.add(title)
-                    found = True
+    new_jobs = []
+    for card in cards:
+        if any(skill in card.text for skill in FILTERED_SKILLS):
+            link_tag = card.find("a", href=True)
+            title_tag = card.find("h2")
 
-    if not found:
-        print("Nema novih poslova za slanje.")
+            if link_tag and title_tag:
+                title = title_tag.text.strip()
+                href = link_tag['href']
+                job_id = href.split("-")[-1]
 
-# ✅ Glavna petlja
+                if job_id not in SEEN_MISSIONS:
+                    SEEN_MISSIONS.add(job_id)
+                    full_url = f"https://www.needhelp.com{href}"
+                    new_jobs.append(f"🔧 {title}\n{full_url}")
+    return new_jobs
+
+
+def main():
+    try:
+        bot.send_message(chat_id=CHAT_ID, text="✅ Bot je uspešno pokrenut na Renderu!")
+        while True:
+            jobs = fetch_jobs()
+            if jobs:
+                for job in jobs:
+                    bot.send_message(chat_id=CHAT_ID, text=job)
+            time.sleep(300)  # 5 minuta
+    except Exception as e:
+        bot.send_message(chat_id=CHAT_ID, text=f"❌ Greška: {e}")
+
+
 if __name__ == "__main__":
-    bot.send_message(chat_id=CHAT_ID, text="✅ Bot je uspešno pokrenut na Renderu!")
-    while True:
-        check_jobs()
-        time.sleep(300)  # proverava na svakih 5 minuta
-
-
+    main()
