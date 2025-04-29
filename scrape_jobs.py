@@ -1,89 +1,74 @@
-import time
 import os
+import time
 import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from dotenv import load_dotenv
+from selenium.webdriver.chrome.service import Service
 from telegram import Bot
+from dotenv import load_dotenv
 
-# Ucitaj .env varijable
 load_dotenv()
+
 TOKEN = os.getenv("TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-# Podesi Telegram bota
 bot = Bot(token=TOKEN)
 
-# Konfiguracija za Chromium browser
+# ✅ Putanja do Chromium browsera na Render serveru
+CHROME_PATH = "/usr/bin/chromium-browser"
+CHROMEDRIVER_PATH = "/usr/bin/chromedriver"
+
 options = Options()
-options.binary_location = '/usr/bin/chromium-browser'
-options.add_argument('--headless')
-options.add_argument('--no-sandbox')
-options.add_argument('--disable-dev-shm-usage')
+options.binary_location = CHROME_PATH
+options.add_argument("--headless")
+options.add_argument("--no-sandbox")
+options.add_argument("--disable-dev-shm-usage")
 
-# Pokreni driver
-driver = webdriver.Chrome(options=options)
+service = Service(CHROMEDRIVER_PATH)
+driver = webdriver.Chrome(service=service, options=options)
 
-# Lista kategorija koje nas zanimaju
-ZANIMANJA = [
-    "Montage de meubles", "Menuisier, ébéniste", "Électricité", "Pose carrelage",
-    "Percer, fixer", "Découpe", "Pose sanitaire", "Pose parquet",
-    "Peinture", "Enduit", "Pose de porte, portail"
+# ✅ Poslovi koji su već poslati
+sent_jobs = set()
+
+# ✅ Zanimanja koja želiš da pratiš
+KEYWORDS = [
+    "Montage de meubles", "Menuisier, ébéniste", "Électricité",
+    "Pose carrelage", "Enduit", "Pose de porte, portail",
+    "Percer, fixer", "Découpe", "Pose sanitaire",
+    "Pose parquet", "Peinture"
 ]
 
-# Funkcija za slanje poruke
+def check_jobs():
+    global sent_jobs
+    driver.get("https://www.needhelp.com/")
 
-def send_telegram_message(message):
-    bot.send_message(chat_id=CHAT_ID, text=message)
-
-# Funkcija za proveru poslova
-
-def scrape_jobs():
-    driver.get("https://www.needhelp.com/fr-fr/missions")
-    time.sleep(5)  # Sačekaj da se stranica ucita
+    time.sleep(3)  # sačekaj da se stranica učita
 
     soup = BeautifulSoup(driver.page_source, "html.parser")
-    job_cards = soup.find_all("div", class_="missions-card")
+    jobs = soup.find_all("div", class_="card-body")
 
-    novi_poslovi = []
-
-    for posao in job_cards:
-        title_tag = posao.find("div", class_="title")
+    found = False
+    for job in jobs:
+        title_tag = job.find("h2")
         if title_tag:
-            title = title_tag.text.strip()
-            for zanimanje in ZANIMANJA:
-                if zanimanje.lower() in title.lower():
-                    link_tag = posao.find("a", href=True)
-                    link = "https://www.needhelp.com" + link_tag['href'] if link_tag else "https://www.needhelp.com/fr-fr/missions"
-                    message = f"🔔 Novi posao: {title}\n➡️ Link: {link}"
-                    novi_poslovi.append(message)
-                    break
+            title = title_tag.get_text(strip=True)
+            if any(keyword.lower() in title.lower() for keyword in KEYWORDS):
+                if title not in sent_jobs:
+                    link = "https://www.needhelp.com" + job.find("a")["href"]
+                    message = f"🔨 Novi posao: {title}\n{link}"
+                    bot.send_message(chat_id=CHAT_ID, text=message)
+                    sent_jobs.add(title)
+                    found = True
 
-    return novi_poslovi
+    if not found:
+        print("Nema novih poslova za slanje.")
 
-# Glavna funkcija
-
-def main():
-    poslati_poslovi = set()
-
-    send_telegram_message("✅ Bot je uspešno pokrenut na Renderu!")
-
-    while True:
-        try:
-            novi_poslovi = scrape_jobs()
-
-            for posao in novi_poslovi:
-                if posao not in poslati_poslovi:
-                    send_telegram_message(posao)
-                    poslati_poslovi.add(posao)
-
-            time.sleep(300)  # Cekaj 5 minuta
-
-        except Exception as e:
-            print(f"Greska u radu bota: {e}")
-            time.sleep(60)
-
+# ✅ Glavna petlja
 if __name__ == "__main__":
-    main()
+    bot.send_message(chat_id=CHAT_ID, text="✅ Bot je uspešno pokrenut na Renderu!")
+    while True:
+        check_jobs()
+        time.sleep(300)  # proverava na svakih 5 minuta
+
 
