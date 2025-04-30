@@ -8,7 +8,7 @@ from telegram import Bot
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 
-# Učitaj .env varijable
+# Učitavanje .env vrednosti
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
@@ -23,10 +23,8 @@ FILTERED_SKILLS = [
 URL = "https://www.needhelp.com/missions"
 SEEN_MISSIONS = set()
 
-# Konfiguriši Selenium
+# Podesi Chrome opcije i lokaciju sistema
 options = Options()
-
-# Pronađi chromium binary (može biti "chromium" ili "chromium-browser")
 chrome_path = shutil.which("chromium") or shutil.which("chromium-browser")
 if chrome_path is None:
     raise Exception("❌ Chromium nije pronađen na sistemu!")
@@ -36,9 +34,12 @@ options.add_argument('--headless')
 options.add_argument('--no-sandbox')
 options.add_argument('--disable-dev-shm-usage')
 
-# Pokreni browser
-driver = webdriver.Chrome(executable_path=shutil.which("chromedriver"), options=options)
+# Pokreni Chrome driver
+driver_path = shutil.which("chromedriver")
+if driver_path is None:
+    raise Exception("❌ Chromedriver nije pronađen na sistemu!")
 
+driver = webdriver.Chrome(executable_path=driver_path, options=options)
 
 def fetch_jobs():
     driver.get(URL)
@@ -61,4 +62,21 @@ def fetch_jobs():
                     SEEN_MISSIONS.add(job_id)
                     full_url = f"https://www.needhelp.com{href}"
                     new_jobs.append(f"🔧 {title}\n{full_url}")
-    return new_jobs_
+    return new_jobs
+
+
+def main():
+    try:
+        bot.send_message(chat_id=CHAT_ID, text="✅ Bot je uspešno pokrenut na Renderu!")
+        while True:
+            jobs = fetch_jobs()
+            if jobs:
+                for job in jobs:
+                    bot.send_message(chat_id=CHAT_ID, text=job)
+            time.sleep(300)
+    except Exception as e:
+        bot.send_message(chat_id=CHAT_ID, text=f"❌ Greška: {e}")
+
+
+if __name__ == "__main__":
+    main()
