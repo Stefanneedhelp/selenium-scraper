@@ -1,6 +1,6 @@
 services:
   - type: worker
-    name: selenium-job-bot
+    name: job-bot-worker
     env: python
     plan: free
     buildCommand: |
