@@ -4,9 +4,7 @@ import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from telegram import Bot
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-import chromedriver_autoinstaller
+from playwright.sync_api import sync_playwright
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
@@ -22,20 +20,16 @@ FILTERED_SKILLS = [
 URL = "https://www.needhelp.com/missions"
 SEEN_MISSIONS = set()
 
-# Automatski instaliraj odgovarajući chromedriver
-chromedriver_autoinstaller.install()
-
-options = Options()
-options.add_argument('--headless')
-options.add_argument('--no-sandbox')
-options.add_argument('--disable-dev-shm-usage')
-
-driver = webdriver.Chrome(options=options)
-
 def fetch_jobs():
-    driver.get(URL)
-    time.sleep(3)
-    soup = BeautifulSoup(driver.page_source, "html.parser")
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(URL)
+        page.wait_for_timeout(3000)
+        html = page.content()
+        browser.close()
+
+    soup = BeautifulSoup(html, "html.parser")
     cards = soup.find_all("div", class_="css-19uc56f")
 
     new_jobs = []
@@ -58,7 +52,7 @@ def fetch_jobs():
 
 def main():
     try:
-        bot.send_message(chat_id=CHAT_ID, text="✅ Bot je uspešno pokrenut na Renderu!")
+        bot.send_message(chat_id=CHAT_ID, text="✅ Playwright bot pokrenut na Renderu!")
         while True:
             jobs = fetch_jobs()
             if jobs:
