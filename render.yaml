@@ -3,12 +3,11 @@ services:
     name: job-bot-worker
     env: python
     plan: free
-    buildCommand: |
-      pip install -r requirements.txt
-      playwright install --with-deps
+    buildCommand: ./build.sh
     startCommand: python scrape_jobs.py
     envVars:
       - key: TOKEN
         sync: false
       - key: CHAT_ID
         sync: false
+
