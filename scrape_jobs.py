@@ -1,14 +1,13 @@
 import os
 import time
 import requests
-import shutil
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from telegram import Bot
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+import chromedriver_autoinstaller
 
-# Učitavanje .env vrednosti
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
@@ -23,23 +22,15 @@ FILTERED_SKILLS = [
 URL = "https://www.needhelp.com/missions"
 SEEN_MISSIONS = set()
 
-# Podesi Chrome opcije i lokaciju sistema
-options = Options()
-chrome_path = shutil.which("chromium") or shutil.which("chromium-browser")
-if chrome_path is None:
-    raise Exception("❌ Chromium nije pronađen na sistemu!")
-options.binary_location = chrome_path
+# Automatski instaliraj odgovarajući chromedriver
+chromedriver_autoinstaller.install()
 
+options = Options()
 options.add_argument('--headless')
 options.add_argument('--no-sandbox')
 options.add_argument('--disable-dev-shm-usage')
 
-# Pokreni Chrome driver
-driver_path = shutil.which("chromedriver")
-if driver_path is None:
-    raise Exception("❌ Chromedriver nije pronađen na sistemu!")
-
-driver = webdriver.Chrome(executable_path=driver_path, options=options)
+driver = webdriver.Chrome(options=options)
 
 def fetch_jobs():
     driver.get(URL)
