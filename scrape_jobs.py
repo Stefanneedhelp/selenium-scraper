@@ -4,7 +4,9 @@ import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from telegram import Bot
-import undetected_chromedriver.v2 as uc
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+import chromedriver_autoinstaller
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
@@ -20,12 +22,15 @@ FILTERED_SKILLS = [
 URL = "https://www.needhelp.com/missions"
 SEEN_MISSIONS = set()
 
-options = uc.ChromeOptions()
+# Automatski instaliraj odgovarajući chromedriver
+chromedriver_autoinstaller.install()
+
+options = Options()
 options.add_argument('--headless')
 options.add_argument('--no-sandbox')
 options.add_argument('--disable-dev-shm-usage')
-driver = uc.Chrome(options=options)
 
+driver = webdriver.Chrome(options=options)
 
 def fetch_jobs():
     driver.get(URL)
@@ -59,7 +64,7 @@ def main():
             if jobs:
                 for job in jobs:
                     bot.send_message(chat_id=CHAT_ID, text=job)
-            time.sleep(300)  # 5 minuta
+            time.sleep(300)
     except Exception as e:
         bot.send_message(chat_id=CHAT_ID, text=f"❌ Greška: {e}")
 

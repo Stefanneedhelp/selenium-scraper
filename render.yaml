@@ -1,8 +1,12 @@
 services:
-  - type: worker
-    name: selenium-scraper
+  - type: web
+    name: selenium-job-bot
     env: python
-    plan: starter
-    region: oregon
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "python scrape_jobs.py"
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python scrape_jobs.py
+    envVars:
+      - key: TOKEN
+        sync: false
+      - key: CHAT_ID
+        sync: false
