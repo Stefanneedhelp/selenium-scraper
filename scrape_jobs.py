@@ -2,15 +2,19 @@ import os
 import time
 import requests
 import subprocess
+import threading
+import http.server
+import socketserver
+from pathlib import Path
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from telegram import Bot
 from playwright.sync_api import sync_playwright
 
-# ⬇️ Automatski install Chromium browsera (ako nije već instaliran)
+# ⬇️ Instalacija Chromium browsera ako već nije tu
 subprocess.run(["playwright", "install", "chromium"])
 
-# ⬇️ Učitavanje environment varijabli
+# ⬇️ Load environment varijabli
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
@@ -19,7 +23,6 @@ print("🔁 Pokrećem bot...")
 print("📦 TOKEN:", TOKEN)
 print("📦 CHAT_ID:", CHAT_ID)
 
-# ⬇️ Provera da li su varijable definisane
 if not TOKEN or not CHAT_ID:
     raise Exception("❌ TOKEN ili CHAT_ID nisu definisani!")
 
@@ -36,7 +39,9 @@ SEEN_MISSIONS = set()
 
 def fetch_jobs():
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        # ⬇️ Precizna putanja do Chromium executable-a
+        chromium_path = Path.home() / ".cache" / "ms-playwright" / "chromium-1169" / "chrome-linux" / "chrome"
+        browser = p.chromium.launch(headless=True, executable_path=str(chromium_path))
         page = browser.new_page()
         page.goto(URL)
         page.wait_for_timeout(3000)
@@ -71,7 +76,7 @@ def main():
             if jobs:
                 for job in jobs:
                     bot.send_message(chat_id=CHAT_ID, text=job)
-            time.sleep(300)  # svakih 5 minuta
+            time.sleep(300)
     except Exception as e:
         print(f"❌ Fatalna greška: {e}")
         try:
@@ -79,5 +84,11 @@ def main():
         except:
             pass
 
+# ⬇️ Lažni web server da Render ne prekine servis
+def fake_web_server():
+    with socketserver.TCPServer(("", 10000), http.server.SimpleHTTPRequestHandler) as httpd:
+        httpd.serve_forever()
+
 if __name__ == "__main__":
+    threading.Thread(target=fake_web_server, daemon=True).start()
     main()
