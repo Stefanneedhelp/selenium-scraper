@@ -3,4 +3,4 @@
 echo "🔧 Pokrećem build.sh skriptu..."
 
 pip install -r requirements.txt
-playwright install installchromium
+playwright install chromium
