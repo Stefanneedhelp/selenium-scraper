@@ -1,7 +1,6 @@
 #!/bin/bash
 
-# Install Python packages
-pip install -r requirements.txt
+echo "🔧 Pokrećem build.sh skriptu..."
 
-# Install Playwright browsers
-playwright install --with-deps
+pip install -r requirements.txt
+playwright install installchromium
