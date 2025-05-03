@@ -11,10 +11,13 @@ from dotenv import load_dotenv
 from telegram import Bot
 from playwright.sync_api import sync_playwright
 
-# ⬇️ Instalacija Chromium browsera ako već nije tu
+# ⬇️ Postavi Playwright da koristi ispravan cache path
+os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(Path.home() / ".cache" / "ms-playwright")
+
+# ⬇️ Instalacija Chromium browsera
 subprocess.run(["playwright", "install", "chromium"])
 
-# ⬇️ Load environment varijabli
+# ⬇️ Učitavanje environment varijabli
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
@@ -39,9 +42,7 @@ SEEN_MISSIONS = set()
 
 def fetch_jobs():
     with sync_playwright() as p:
-        # ⬇️ Precizna putanja do Chromium executable-a
-        chromium_path = Path.home() / ".cache" / "ms-playwright" / "chromium-1169" / "chrome-linux" / "chrome"
-        browser = p.chromium.launch(headless=True, executable_path=str(chromium_path))
+        browser = p.chromium.launch(headless=True)
         page = browser.new_page()
         page.goto(URL)
         page.wait_for_timeout(3000)
